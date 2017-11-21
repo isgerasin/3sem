@@ -1,6 +1,6 @@
 #include <errno.h>
 
-#define PL fprintf(stderr, "%d\n", __LINE__)
+#define PL fprintf(stderr, " %s %d \n", __PRETTY_FUNCTION__,  __LINE__)
 
 #define _( var ) do{\
 		errno = 0;\
