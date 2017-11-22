@@ -58,9 +58,9 @@ int StartClient(pid_t pid)
 	SIGACTION(SIGUSR1, hndlSIGUSR, set, 0);
 	SIGACTION(SIGUSR2, hndlSIGUSR, set, 0);
 	SIGACTION(SIGCHLD, hndlSIGUSR, set, 0);
-	exit(0);
+
 	_(sigemptyset(&set));
-	//sleep(1);
+
 	while(1)
 	{
 		for (int i = 0; i < 8; i++)
@@ -72,8 +72,8 @@ int StartClient(pid_t pid)
 			_(kill(pid, SIGUSR1));
 		}
 		_(write(STDOUT_FILENO, &byte, sizeof(byte)));
-		//fflush(stdin);
 	}
+
 	return 0;
 }
 
@@ -87,13 +87,9 @@ int StartServer(const char* name)
 	size_t nread = 0;
 	int fd = 0;
 
-
-
 	_(fd = open(name, O_RDONLY));
-	// PL;
 	_(sigemptyset(&set));
 	SIGACTION(SIGUSR1, hndl, set, 0);
-	// PL;
 	
 	do
 	{
@@ -103,23 +99,22 @@ int StartServer(const char* name)
 			switch(byte & (1 << 8))
 			{
 				case 0:
-					kill(ppid, SIGUSR1);
+					_(kill(ppid, SIGUSR1));
 					break;
 				case (1 << 8):
-					kill(ppid, SIGUSR2);
+					_(kill(ppid, SIGUSR2));
 					break;
 				default:
 					return -1;
 			}
 			byte = byte << 1;
 			_(sigemptyset(&set));
-
+			alarm(5);
 			sigsuspend(&set);
+			alarm(0);
 
 		}
 	}while(nread);
-
-	//_(kill(ppid, SIGKILL));
 
 	close(fd);
 	return 0;
