@@ -104,16 +104,14 @@ int ChannelDtor(channel_t* this)
 	this->buf = NULL;
 
 	close(this->pipeIn[0]);
-	(this->pipeIn)[0] = -1;
-
 	close(this->pipeIn[1]);
-	(this->pipeIn)[1] = -1;
-
 	close(this->pipeOut[0]);
-	(this->pipeOut)[0] = -1;
+	close(this->pipeOut[1]);
 
-	close(this->pipeIn[1]);
-	(this->pipeOut)[1] = -1;
+	this->pipeIn[0] = -1;
+	this->pipeIn[1] = -1;
+	this->pipeOut[0] = -1;
+	this->pipeOut[1] = -1;
 
 	this->bufSize = 0;
 	free(this);
@@ -161,23 +159,44 @@ int ChannelDump(channel_t* this)
 
 int StartChild(channel_t* chnl)
 {
-	long long int nread = 1;
+	_(close(chnl->pipeIn[1]));
+	_(close(chnl->pipeOut[0]));
+
+	ssize_t nread = 1;
 	//fprintf(stderr, "%d\n", chnl->pipeIn[0]);
 	while(nread)
 	{
+		// sleep(chnl->n);
 		_(nread = read(chnl->pipeIn[0], chnl->locBuf, MSGSIZE));
+		//fprintf(stderr, "%c%c  %li\n_________", chnl->locBuf[0], chnl->locBuf[1], nread);
+		//*(ssize_t)chnl->locBuf = nraed;
+		// ChannelDump(chnl);
 		//ChannelDump(chnl);
 		//fprintf(stderr, "%lli\n", nread);
 		_(write(chnl->pipeOut[1], chnl->locBuf, nread));
 	}
+	//*(ssize_t)chnl->locBuf = -1;
+	//write(chnl->pipeOut[1], chnl->locBuf, sizeof(nread))
+
+/*
+	struct stat sbIn = {}; 
+	struct stat sbOut = {}; 
+	fstat(chnl->pipeIn[0], &sbIn);
+	fstat(chnl->pipeOut[1], &sbOut);
+	fprintf(stderr, "in = %d out = %d\n", sbIn.st_nlink, sbOut.st_nlink);*/
+
+	//ChannelDump(chnl);
+	//sleep(chnl->n);
 
 	close(chnl->pipeIn[0]);
 	close(chnl->pipeOut[1]);
+	//PL;
 	exit(0);
 }
 
 int ServerDtorN(server_t* this, long long n)
 {
+
 	//this->N = 0;
 	this->maxOutFd = 0;
 	this->maxInFd = 0;
@@ -186,8 +205,8 @@ int ServerDtorN(server_t* this, long long n)
 
 	for (long long i = this->N; i > n; i--)
 	{
-	//	PL;
-	//	fprintf(stderr, "%lli\n", i);
+		// PL;
+		// fprintf(stderr, "%lli\n", i);
 		ChannelDtor(this->chnls[i]);
 	}
 
@@ -229,7 +248,6 @@ server_t* ServerCtor(long long int N, int inputFd)
 	if (this->chnls == NULL)
 		return NULL;
 
-	//N = 1;
 
 	FD_ZERO(&this->inFds);
 	FD_ZERO(&this->outFds);
@@ -241,7 +259,7 @@ server_t* ServerCtor(long long int N, int inputFd)
 
 	channel_t** chnls = this->chnls; 
 
-	for (long long int i = N; i > 0; i--)
+	for (long long int i = N; i >= 1; i--)
 	{
 		_((size_t) (chnls[i] = ChannelCtor( ((size_t) pow(3, i)) *512, i)));
 /*
@@ -267,8 +285,6 @@ server_t* ServerCtor(long long int N, int inputFd)
 		{
 			channel_t* chnl = chnls[i];
 
-			_(close(chnl->pipeIn[1]));
-			_(close(chnl->pipeOut[0]));
 			if (i == N)
 			{
 				close(chnl->pipeIn[0]);
@@ -279,8 +295,8 @@ server_t* ServerCtor(long long int N, int inputFd)
 				close(chnl->pipeOut[1]);
 				chnl->pipeOut[1] = STDOUT_FILENO;
 			}
-			PL;
-			fprintf(stderr, "%lli\n", i);
+			//PL;
+			//fprintf(stderr, "%lli\n", i);
 
 			ServerDtorN(this, i);
 			//ServerDump(this);
@@ -306,10 +322,19 @@ server_t* ServerCtor(long long int N, int inputFd)
 		this->maxOutFd = max(this->maxOutFd, chnls[i]->pipeOut[0]);*/
 	}
 
-	for (long long int i = N; i > 0; i--)
+	for (long long int i = N; i >= 1; i--)
 	{
+		/*
+		struct stat sbIn = {};
+		struct stat sbOut = {};
+		fstat(chnls[i]->pipeIn[1], &sbIn);
+		fstat(chnls[i]->pipeOut[0], &sbOut);
+		fprintf(stderr, "in = %d out = %d\n", sbIn.st_nlink, sbOut.st_nlink);
+		*/
 		_(close(chnls[i]->pipeIn[0]));
 		_(close(chnls[i]->pipeOut[1]));
+		//close(chnls[i]->pipeIn[1]);
+		//close(chnls[i]->pipeOut[0]);
 
 		_(fcntl(chnls[i]->pipeIn[1], F_SETFL, O_WRONLY | O_NONBLOCK));
 		FD_SET(chnls[i]->pipeIn[1], &this->inFds);
@@ -318,6 +343,9 @@ server_t* ServerCtor(long long int N, int inputFd)
 		_(fcntl(chnls[i]->pipeOut[0], F_SETFL, O_RDONLY | O_NONBLOCK));
 		FD_SET(chnls[i]->pipeOut[0], &this->outFds);
 		this->maxOutFd = max(this->maxOutFd, chnls[i]->pipeOut[0]);
+
+		;
+		
 	}
 
 	FD_CLR(this->chnls[N]->pipeIn[1], &this->inFds);
@@ -326,6 +354,8 @@ server_t* ServerCtor(long long int N, int inputFd)
 	FD_CLR(chnls[1]->pipeOut[0], &this->outFds);
 	close(chnls[1]->pipeOut[0]);
 
+
+	//while(1);
 	return this;
 }
 
@@ -375,36 +405,53 @@ int StartServer(long long int N, int inputFd)
 	int res = 0;
 
 	size_t nread = 1;
-	int nextClose = 0;
 	while(nread)
 	{
-		//readfds = server->outFds;
-		//writefds = server->inFds;
+		//sleep(10);
+		readfds = server->outFds;
+		writefds = server->inFds;
 		_(res = select(nfds, &readfds, &writefds, NULL, NULL));
-		//fprintf(stderr, "%d\n", res);
+
+		//fprintf(stderr, "---------------%d\n", res);
 
 		for (long long i = N; i >= 1; i--)
 		{
+
 			if (FD_ISSET(server->chnls[i]->pipeOut[0], &readfds))
 			{
-				//_(nread = ServerRead(server, i));
+
+				// _(nread = ServerRead(server, i));
 				_(nread = read(server->chnls[i]->pipeOut[0], server->chnls[i]->buf, MSGSIZE));
-				if (nread == 0)
+
+				fprintf(stderr, "CAn read   %lli %lu\n", i, nread);
+				//if ( *(ssize_t)server->chnls[i]->buf != MSGSIZE - 1)
+				if ( nread == 0)
 				{
+					//fprintf(stderr, "Allllllllllllllllllllllllllllllllllll    good   %d\n", i);
+					//exit(0);
+					/*
 					FD_CLR(server->chnls[i]->pipeIn[1], &server->inFds);
-					close(server->chnls[i]->pipeIn[1]);
+					close(server->chnls[i]->pipeIn[1]);*/
 					FD_CLR(server->chnls[i]->pipeOut[0], &server->outFds);
 					close(server->chnls[i]->pipeOut[0]);
-					continue;
+					//if ( i != 1) nread = 1;
 				}
 
 			}
 			if (FD_ISSET(server->chnls[i]->pipeIn[1], &writefds))
 			{
-				//fprintf(stderr, "Write %d \n", i);
-				_(write(server->chnls[i]->pipeIn[1], server->chnls[i+1]->buf, MSGSIZE));
-				//(ServerWrite(server, i));
+				fprintf(stderr, "\tcan Write   %lli %lu\n", i, nread);
+				_(write(server->chnls[i]->pipeIn[1], server->chnls[i+1]->buf , MSGSIZE));
+				memset(server->chnls[i+1]->buf, 0, MSGSIZE);
+					// _(ServerWrite(server, i));
+				if (!FD_ISSET(server->chnls[i+1]->pipeOut[0], &server->outFds))
+				{
+					FD_CLR(server->chnls[i]->pipeIn[1], &server->inFds);
+					close(server->chnls[i]->pipeIn[1]);
+				}
 			}
+			
+
 			
 			//ChannelDump(server->chnls[i]);
 		}
