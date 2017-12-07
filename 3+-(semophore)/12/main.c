@@ -96,8 +96,9 @@ int StartClient()
 		else 
 			return -1;
 	}
-
-	D(locsb[0], full, 1, SEM_UNDO);
+// отрадное дом 2 б стр 9
+//9037420513 после 15-30 c 17 - 20
+	D(locsb[0], full, 1, 0);
 	_(semop(semid, locsb, 1));
 	
 	size_t nread = 0;
@@ -105,7 +106,7 @@ int StartClient()
 	{
 		D(locsb[0], serverN, 1, IPC_NOWAIT);
 		A(locsb[1], serverN, 1, 0);
-		D(locsb[2], full, 1, SEM_UNDO);
+		D(locsb[2], full, 1, 0);
 		D(locsb[3], mutex, 1, SEM_UNDO);
 		errno = 0;
 		if (semop(semid, locsb, 4) < 0)
@@ -124,6 +125,7 @@ int StartClient()
 	}while(nread);
 
 	end1:
+	
 	semctl(semid, IPC_RMID, 0);
 	shmctl(shmid, IPC_RMID, NULL);
 	end:

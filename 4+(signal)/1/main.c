@@ -19,8 +19,6 @@
 		act.sa_flags = flg; \
 		_(sigaction(sig, &act, &oact))
 
-
-
 int counter = 0;
 char bit = 0;
 
