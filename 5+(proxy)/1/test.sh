@@ -9,7 +9,7 @@ do
 	for ((i=2; i < 15; i++ ))
 	do 
 		./a.out $i $1 > out ; 
-		sleep 0.01 ;
+		sleep 0.05 ;
 		if diff $1 out
 		then
 			echo "ok $a $i" ;

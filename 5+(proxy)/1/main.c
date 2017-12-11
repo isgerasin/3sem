@@ -16,7 +16,7 @@
 
 #define LOCSIZE ((size_t) 128*1024)
 //PIPE_BUF
-#define MSGSIZE (512*3) //PIPE_BUF//(512*3)
+#define MSGSIZE (512*3)
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
@@ -175,6 +175,8 @@ ssize_t StartChild(channel_t* chnl)
 	while(nread)
 	{
 		_(nread = read(chnl->pipeIn[0], chnl->locBuf, MSGSIZE));
+		if (chnl->n == 2)
+			sleep(1);
 		_(write(chnl->pipeOut[1], chnl->locBuf, nread) );
 	}
 
@@ -306,7 +308,7 @@ ssize_t ServerWrite(server_t* this, long long i)
 	if (chnl->endBuf >= chnl->beginBuf)
 	{
 		_(nwrite = write(this->chnls[i]->pipeIn[1], chnl->buf + chnl->beginBuf, min(MSGSIZE, chnl->endBuf - chnl->beginBuf)));
-		chnl->beginBuf += nwrite;
+		chnl->beginBuf = (chnl->beginBuf + nwrite) % chnl->sizeBuf;
 	}
 	else
 	{
@@ -336,7 +338,7 @@ ssize_t ServerRead(server_t* this, long long i)
 	if (chnl->beginBuf - chnl->endBuf > 0)
 	{
 		_(nread = read(chnl->pipeOut[0], chnl->buf + chnl->endBuf, min(chnl->beginBuf - chnl->endBuf, MSGSIZE)));
-		chnl->endBuf += nread;
+		chnl->endBuf = (chnl->endBuf + nread) % chnl->sizeBuf;
 	}
 	else
 	{
@@ -380,38 +382,43 @@ int StartServer(long long int N, int inputFd)
 
 		for (long long i = N; i >= 1; i--)
 		{
+			 // fprintf(stderr, "%lli\n", i);
 			if(FD_ISSET(server->chnls[i]->pipeOut[0], &readfds) && server->chnls[i]->status != FULL)
 			{
+				// PL;
 				_(nread = ServerRead(server, i));
 				if (nread == 0)
 				{
 					FD_CLR(server->chnls[i]->pipeOut[0], &server->outFds);
 					close(server->chnls[i]->pipeOut[0]);
 				}
+				// PL;
 			}
-
+			// PL;
 			if (FD_ISSET(server->chnls[i]->pipeIn[1], &writefds) && server->chnls[i+1]->status != EMPTY)
 			{
+				// PL;
 				_(nwrite = ServerWrite(server, i));
 				
 			}
-
+			// PL;
 			if (FD_ISSET(server->chnls[i]->pipeIn[1], &writefds) &&
 				server->chnls[i+1]->status == EMPTY && 
 				!FD_ISSET(server->chnls[i+1]->pipeOut[0], &server->outFds))
 			{
+				// PL;
 				FD_CLR(server->chnls[i]->pipeIn[1], &server->inFds);
 				close(server->chnls[i]->pipeIn[1]);
 				if (i == 1) 
 					isend = 1;
+				// PL;
 			}
 		}
-
 	}
-	pid_t lastChild = server->lastChild;
 
-	//_(waitpid(lastChild, NULL, 0));
-	//while(1);
+	//_(waitpid(server->lastChild, NULL, 0));
+
+	ServerDtorN(server, 0);
 	return 0;
 }
 
