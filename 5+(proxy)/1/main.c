@@ -175,8 +175,8 @@ ssize_t StartChild(channel_t* chnl)
 	while(nread)
 	{
 		_(nread = read(chnl->pipeIn[0], chnl->locBuf, MSGSIZE));
-		if (chnl->n == 2)
-			sleep(1);
+		// if (chnl->n == 2)
+			// sleep(1);
 		_(write(chnl->pipeOut[1], chnl->locBuf, nread) );
 	}
 
@@ -212,7 +212,7 @@ int ServerDump(server_t* this)
 	fprintf(stderr, "server_t [%p]\n"
 					"\tN = %lli\n", this, this->N);
 
-	for (size_t i = this->N; i >= 0;i--)
+	for (size_t i = this->N; i >= 1;i--)
 	{
 		ChannelDump(this->chnls[i]);
 	}
@@ -303,20 +303,22 @@ ssize_t ServerWrite(server_t* this, long long i)
 	channel_t* chnl = this->chnls[i+1];
 
 	if (chnl->status == EMPTY)
-		return -1;
+		return 0;
 
 	if (chnl->endBuf >= chnl->beginBuf)
 	{
-		_(nwrite = write(this->chnls[i]->pipeIn[1], chnl->buf + chnl->beginBuf, min(MSGSIZE, chnl->endBuf - chnl->beginBuf)));
+		nwrite = write(this->chnls[i]->pipeIn[1], chnl->buf + chnl->beginBuf, min(MSGSIZE, chnl->endBuf - chnl->beginBuf));
+		if (nwrite == -1) return -1;
 		chnl->beginBuf = (chnl->beginBuf + nwrite) % chnl->sizeBuf;
 	}
 	else
 	{
-		_(nwrite = write(this->chnls[i]->pipeIn[1], chnl->buf + chnl->beginBuf, min(MSGSIZE, chnl->sizeBuf - chnl->beginBuf)));
+		nwrite = write(this->chnls[i]->pipeIn[1], chnl->buf + chnl->beginBuf, min(MSGSIZE, chnl->sizeBuf - chnl->beginBuf));
+		if (nwrite == -1) return -1;
 		chnl->beginBuf = (chnl->beginBuf + nwrite) % chnl->sizeBuf;
 
 		if (chnl->beginBuf == 0)
-			_(nwrite += chnl->beginBuf = write(this->chnls[i]->pipeIn[1], chnl->buf + chnl->beginBuf, MSGSIZE - nwrite));
+			nwrite += chnl->beginBuf = write(this->chnls[i]->pipeIn[1], chnl->buf + chnl->beginBuf, MSGSIZE - nwrite);
 	}
 
 	if (chnl->beginBuf == chnl->endBuf)
@@ -369,38 +371,56 @@ int StartServer(long long int N, int inputFd)
 
 	fd_set readfds = {};
 	fd_set writefds = {};
+	fd_set reservWrite = {};
 	int nfds = max(server->maxInFd, server->maxOutFd);
 	int res = 0;
 	ssize_t nread = 0;
 	ssize_t nwrite = 0;
 	int isend = 0;
+	//server->inFds = {};
 	while(!isend)
 	{
+		PL;
 		readfds = server->outFds;
-		writefds = server->inFds;
-		_(res = select(nfds, &readfds, &writefds, NULL, NULL));
+		_(res = select(server->maxOutFd, &readfds, /*&writefds*/ NULL, NULL, NULL));
 
 		for (long long i = N; i >= 1; i--)
 		{
+			
 			 // fprintf(stderr, "%lli\n", i);
 			if(FD_ISSET(server->chnls[i]->pipeOut[0], &readfds) && server->chnls[i]->status != FULL)
 			{
 				// PL;
 				_(nread = ServerRead(server, i));
+
 				if (nread == 0)
 				{
 					FD_CLR(server->chnls[i]->pipeOut[0], &server->outFds);
 					close(server->chnls[i]->pipeOut[0]);
 				}
-				// PL;
+
+				FD_SET(server->chnls[i-1]->pipeIn[1], &reservWrite);
 			}
-			// PL;
+		}
+		/*
+				if (FD_ISSET(server->chnls[i-1]->pipeIn[1], &writefds) && server->chnls[i]->status != EMPTY)
+				{
+				// PL;
+					_(nwrite = ServerWrite(server, i-1));
+				
+				}*/
+			
+/*
 			if (FD_ISSET(server->chnls[i]->pipeIn[1], &writefds) && server->chnls[i+1]->status != EMPTY)
 			{
 				// PL;
-				_(nwrite = ServerWrite(server, i));
-				
+				nwrite = 1;
+				while(nwrite > 0)
+					nwrite = ServerWrite(server, i);
+
+				FD_CLR(server->chnls[i]->pipeIn[1], &writefds);
 			}
+			
 			// PL;
 			if (FD_ISSET(server->chnls[i]->pipeIn[1], &writefds) &&
 				server->chnls[i+1]->status == EMPTY && 
@@ -412,7 +432,49 @@ int StartServer(long long int N, int inputFd)
 				if (i == 1) 
 					isend = 1;
 				// PL;
+			}*/
+
+//!!!!!!!!!!!!!!!!!
+		writefds = reservWrite;
+		PL;
+		_(res = select(server->maxInFd, NULL, &writefds, NULL, NULL));
+
+		for (long long i = N; i >= 1; i--)
+		{
+			if (FD_ISSET(server->chnls[i]->pipeIn[1], &writefds) && server->chnls[i+1]->status != EMPTY)
+			{
+				// PL;
+				nwrite = 1;
+				while(nwrite > 0)
+					nwrite = ServerWrite(server, i);
+
+				if (server->chnls[i+1]->status == EMPTY && 
+					!FD_ISSET(server->chnls[i+1]->pipeOut[0], &server->outFds))
+				{
+
+					FD_CLR(server->chnls[i]->pipeIn[1], &server->inFds);
+					close(server->chnls[i]->pipeIn[1]);
+					if (i == 1) 
+						isend = 1;
+					// PL;
+				}
+				FD_CLR(server->chnls[i]->pipeOut[0], &writefds);
+				FD_CLR(server->chnls[i]->pipeOut[0], &reservWrite);
 			}
+			/*
+			if (FD_ISSET(server->chnls[i]->pipeIn[1], &writefds) &&
+				server->chnls[i+1]->status == EMPTY && 
+				!FD_ISSET(server->chnls[i+1]->pipeOut[0], &server->outFds))
+			{
+				// PL;
+				FD_CLR(server->chnls[i]->pipeIn[1], &server->inFds);
+				close(server->chnls[i]->pipeIn[1]);
+				if (i == 1) 
+					isend = 1;
+				// PL;
+			}*/
+//!!!!!!!!!!!!!!!!
+
 		}
 	}
 
