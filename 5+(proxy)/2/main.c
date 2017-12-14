@@ -393,7 +393,6 @@ int StartServer(long long int N, int inputFd)
 	{
 		FD_ZERO(&readFds);
 		FD_ZERO(&writeFds);
-		int cntr = 0;
 		server->maxInFd = 0;
 		server->maxOutFd = 0;
 
