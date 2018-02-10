@@ -43,6 +43,8 @@ int main(int argc, char const *argv[])
 	if ( pid == 0)
 	{
 	//	*(int*)NULL = 7;
+		while(1);
+
 		fprintf(stderr, "END\n");
 		exit(0);
 	}

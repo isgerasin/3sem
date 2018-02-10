@@ -35,11 +35,12 @@ int main(int argc, char const *argv[])
 	}
 	printf("Number of files in directory : %lu\n", countFile);
 	printf("Number of jestkii files in directory : %lu\n", countFile - countJostkiiFile);
+	//fork();
 
 	if ( closedir(dir) )
 	{
-	fprintf(stderr, "Can't close DIR\n");
-	return -1;
+		fprintf(stderr, "Can't close DIR\n");
+		return -1;
 	}
 	return 0;
 }

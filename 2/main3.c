@@ -6,6 +6,7 @@
 void* printN(void* arg)
 {
 	printf("%ld\n", *(long*)arg);
+	while(1);
 	return NULL;
 }
 
@@ -19,6 +20,6 @@ int main(int argc, char* argv[])
 	for (long i = 0; i < n; i++)
 		if(	pthread_create(&tid, NULL, printN, &i) != 0)
 			fprintf(stderr, "Error\n");
-			
+	while(1);
 	return 0;
 }
